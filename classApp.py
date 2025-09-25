@@ -19,7 +19,7 @@ def Init_Interface(self):
     # Заголовок
     CTk.CTkLabel(
         tab_settings,
-        text="Общие настройки весов и шаблонов", 
+        text="Общие настройки весов и шаблонов",
         font=CTk.CTkFont(size=16, weight="bold"),
     ).pack(pady=10)
 
@@ -120,4 +120,5 @@ def Init_Interface(self):
 class App(CTk.CTk):
     def __init__(self):
         super().__init__()
+
         Init_Interface(self)
