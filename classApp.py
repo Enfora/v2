@@ -2,6 +2,10 @@ import customtkinter as CTk
 
 
 def Init_Interface(self):
+
+    CTk.set_appearance_mode("Light")  # "Dark", "Light", "System"
+    CTk.set_default_color_theme("dark-blue")  # "blue", "green", "dark-blue"
+
     # Окно и заголовок программы
     self.geometry("1024x768")
     self.resizable = (False, False)  # type: ignore
@@ -67,7 +71,7 @@ def Init_Interface(self):
     )
     self.template_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
     # Кнопка выбора файла
-    btw_browse_button = CTk.CTkButton(input_frame, text="Обзор...", width=100)
+    btw_browse_button = CTk.CTkButton(input_frame, text="...", width=50)
     btw_browse_button.pack(side="right")
 
     # PDF
@@ -91,7 +95,7 @@ def Init_Interface(self):
         pdf_frame, placeholder_text="Путь к каталогу pdf", height=35
     )
     self.pdf_entry.pack(side="left", fill="x", expand=True, padx=(5, 10))
-    self.pdf_browse_button = CTk.CTkButton(pdf_frame, text="Обзор...", width=100)
+    self.pdf_browse_button = CTk.CTkButton(pdf_frame, text="...", width=50)
     self.pdf_browse_button.pack(side="right")
 
     # Фрейм для экспорта в JPG
@@ -110,10 +114,10 @@ def Init_Interface(self):
     )
     self.checkbox_jpg.pack(side="left", padx=(5, 5))
     self.jpg_entry = CTk.CTkEntry(
-        jpg_frame, placeholder_text="Путь к каталогу jpg", height=35
+        jpg_frame, placeholder_text="Путь к каталогу jpg", height=30
     )
     self.jpg_entry.pack(side="left", fill="x", expand=True, padx=(5, 10))
-    self.jpg_browse_button = CTk.CTkButton(jpg_frame, text="Обзор...", width=100)
+    self.jpg_browse_button = CTk.CTkButton(jpg_frame, text="...", width=50)
     self.jpg_browse_button.pack(side="right")
 
 
