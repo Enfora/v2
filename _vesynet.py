@@ -143,6 +143,7 @@ class App(CTk.CTk):
         self.available_printers = (
             self.get_available_printers()
         )  # Получение списка принтеров
+        
         self.setup_settings_tab()  # Страница установок
         self.setup_event_handlers()  # Установка привязки кнопок
 
