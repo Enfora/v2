@@ -204,13 +204,6 @@ class App(CTk.CTk):
         self.zero_threshold.pack(side="left", fill="x", expand=True, padx=(0, 10))
         # endregion
 
-        # region Количество штук в пачке
-        CTk.CTkLabel(
-            setting_frame,
-            text="Количество штук в пачке:",
-            font=CTk.CTkFont(weight="bold"),
-        ).pack(anchor="w", padx=10, pady=(20, 0))
-
         # Поле ввода для количества штук в пачке
         vcmd = (self.register(self.validate_numeric_input), "%P")
         self.pieces_entry = CTk.CTkEntry(
