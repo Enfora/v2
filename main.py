@@ -4,7 +4,7 @@ import os
 
 
 # ФУНКЦИИ И ПРОЦЕДУРЫ ОСНОВНОЙ ПРОГРАММЫ
-def clear_console():  # Очистка консоли
+def clear_console():  # Очистка консоли, пока оставлю
     os.system("cls")
 
 
