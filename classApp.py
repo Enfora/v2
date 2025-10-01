@@ -3,18 +3,72 @@ import win32print
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 import os
+import json
+import sys
 
+class SimpleConsole(CTk.CTkTextbox):
+    """
+    Кастомная консоль для вывода текста
+    Наследуется от CTkTextbox и перенаправляет stdout
+    """
 
+    def __init__(self, master, **kwargs):
+        # Устанавливаем значения по умолчанию
+        kwargs.setdefault("fg_color", "black")
+        kwargs.setdefault("text_color", "white")
+        kwargs.setdefault("font", ("Consolas", 11))
+        kwargs.setdefault("wrap", "word")
+
+        super().__init__(master, **kwargs)
+
+        # Сохраняем оригинальный stdout и перенаправляем вывод
+        self.old_stdout = sys.stdout
+        sys.stdout = self
+
+        # Делаем консоль только для чтения
+        self.configure(state="disabled")
+
+    def write(self, text):
+        """Перехватывает вывод из print() и добавляет в текстовое поле"""
+        self.configure(state="normal")  # Временно включаем редактирование
+        self.insert("end", text)
+        self.see("end")
+        self.configure(state="disabled")  # Снова делаем только для чтения
+        self.update_idletasks()  # Обновляем интерфейс
+
+    def flush(self):
+        """Требуется для совместимости с sys.stdout"""
+        pass
+
+    def clear(self):
+        """Очищает консоль"""
+        self.configure(state="normal")
+        self.delete("1.0", "end")
+        self.configure(state="disabled")
+
+    def destroy(self):
+        """Восстанавливает оригинальный stdout при уничтожении"""
+        sys.stdout = self.old_stdout
+        super().destroy()
 
 class App(CTk.CTk):
     def __init__(self):
         super().__init__()
 
+        # BAR TANDER
+        self.bar_tender_enable = False
+        self.btApp = None
+
         # Проверяем доступность win32print в конструкторе
         self.WIN32PRINT_AVAILABLE = self.check_win32print_availability()
         self.available_printers = self.get_available_printers()
 
-        self.Init_Interface()
+        self.Init_Interface_Settings()  # Отрисовка страницы настроек
+
+        if self.WIN32PRINT_AVAILABLE:
+            print("⚠ Получение списка принтеров доступно")
+
+        self.load_settings()
 
     # region Вспомогательные ФУНКЦИИ
     def validate_numeric_input(self, new_text):  # Валидация цифр
@@ -36,10 +90,8 @@ class App(CTk.CTk):
         try:
             import win32print
 
-            print("✓ Модуль win32print доступен")
             return True
         except ImportError:
-            print("⚠ Модуль win32print не установлен. Установите: pip install pywin32")
             return False
 
     def get_available_printers(self):  # Получение списка доступных принтеров
@@ -53,10 +105,9 @@ class App(CTk.CTk):
                 win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
             ):
                 printers.append(printer[2])
-            print(f"✓ Найдено принтеров: {len(printers)}")
+
             return printers
         except Exception as e:
-            print(f"✗ Ошибка получения списка принтеров: {e}")
             return printers
 
     def browse_btw_file(self):
@@ -69,8 +120,7 @@ class App(CTk.CTk):
         if file_path and self.validate_btw_file(file_path):
             self.template_entry.delete(0, "end")
             self.template_entry.insert(0, file_path)
-            f=1
-    
+
     def validate_btw_file(self, file_path):
         """Проверка, что файл имеет расширение .btw"""
         file_ext = os.path.splitext(file_path)[1].lower()
@@ -82,11 +132,204 @@ class App(CTk.CTk):
         if not os.path.isfile(file_path):
             messagebox.showerror("Ошибка", "Файл не существует!")
             return False
-    
+
         return True
+
+    def browse_directory_pdf(self):
+        self.browse_directory(self.pdf_puth)
+
+    def browse_directory_jpg(self):
+        self.jpg_browse_button._state = "disabled"
+        self.browse_directory(self.jpg_puth)
+
+    def browse_directory(self, entry_widget):
+        """Открыть диалог выбора директории"""
+        directory = filedialog.askdirectory(title="Выберите папку")
+        if directory:
+            entry_widget.delete(0, "end")
+            entry_widget.insert(0, directory)
+
+    # ФУНКЦИИ СОХРАНЕНИЯ НАСТРОЕК
+    def save_settings(self):  # Запоминаем настройки в JSON
+        """Сохранение настроек в JSON файл"""
+        settings = {
+            "checkbox_jpg": bool(self.checkbox_jpg.get()),
+            "checkbox_pdf": bool(self.checkbox_pdf.get()),
+            "jpg_entry": self.jpg_puth.get(),
+            "pdf_entry": self.pdf_puth.get(),
+            "template_entry": self.template_entry.get(),
+            "ip_address": self.ip_address.get(),
+            "pieces_entry": self.pieces_entry.get(),
+            "unit_printer": self.unit_printer_combo.get(),
+            "total_printer": self.total_printer_combo.get(),
+            "stability_threshold": self.stability_threshold.get(),
+            "poll_interval": self.poll_interval.get(),
+            "zero_threshold": self.zero_threshold.get(),
+        }
+
+        try:
+            with open("settings.json", "w", encoding="utf-8") as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+            # messagebox.showinfo("Успех", "Настройки успешно сохранены в settings.json")
+            print("✓ Настройки успешно сохранены в settings.json")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки: {e}")
+            print(f"✗ Ошибка сохранения настроек: {e}")
+
+    def load_settings(self):
+        """Загрузка настроек из JSON файла"""
+        try:
+            if not os.path.exists("settings.json"):
+                messagebox.showinfo("Информация", "Файл настроек не найден.")
+                print(
+                    "ℹ Файл настроек не найден. Будут использованы настройки по умолчанию."
+                )
+                return
+
+            with open("settings.json", "r", encoding="utf-8") as f:
+                settings = json.load(f)
+
+            # Заполняем поля ввода
+            self.template_entry.delete(0, "end")
+            self.template_entry.insert(0, settings.get("template_entry", ""))
+
+            self.pdf_puth.delete(0, "end")
+            self.pdf_puth.insert(0, settings.get("pdf_entry", ""))
+
+            self.jpg_puth.delete(0, "end")
+            self.jpg_puth.insert(0, settings.get("jpg_entry", ""))
+
+            # Заполняем поле IP адреса
+            self.ip_address.delete(0, "end")
+            self.ip_address.insert(0, settings.get("ip_address", ""))
+
+            # Заполняем поле количества штук в пачке
+            self.pieces_entry.delete(0, "end")
+            self.pieces_entry.insert(0, settings.get("pieces_entry", ""))
+
+            # Стабильность взвешиваний
+            self.stability_threshold.delete(0, "end")
+            self.stability_threshold.insert(0, settings.get("stability_threshold", ""))
+
+            # Интервал опроса весов
+            self.poll_interval.delete(0, "end")
+            self.poll_interval.insert(0, settings.get("poll_interval", ""))
+
+            # Порог нуля
+            self.zero_threshold.delete(0, "end")
+            self.zero_threshold.insert(0, settings.get("zero_threshold", ""))
+
+            # Заполняем выпадающие списки принтеров
+            unit_printer = settings.get("unit_printer", "")
+            if unit_printer in self.available_printers:
+                self.unit_printer_combo.set(unit_printer)
+            elif self.available_printers:
+                self.unit_printer_combo.set(self.available_printers[0])
+
+            total_printer = settings.get("total_printer", "")
+            if total_printer in self.available_printers:
+                self.total_printer_combo.set(total_printer)
+            elif self.available_printers:
+                self.total_printer_combo.set(self.available_printers[0])
+
+            # Устанавливаем чекбоксы
+            if settings.get("checkbox_pdf", False):
+                self.checkbox_pdf.select()
+            else:
+                self.checkbox_pdf.deselect()
+
+            if settings.get("checkbox_jpg", False):
+                self.checkbox_jpg.select()
+            else:
+                self.checkbox_jpg.deselect()
+
+            # messagebox.showinfo("Успех", "Настройки успешно загружены")
+            print("✓ Настройки успешно загружены из settings.json")
+
+        except json.JSONDecodeError:
+            messagebox.showerror(
+                "Ошибка", "Файл настроек поврежден или имеет неверный формат."
+            )
+            print("✗ Ошибка: Файл настроек поврежден или имеет неверный формат.")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить настройки: {e}")
+            print(f"✗ Ошибка загрузки настроек: {e}")
+
+    # ФУНКЦИИ ИНИЦИАЛИЗАЦИИ BARTENDER
+
+    def initialize_bar_tender(self):
+        """Инициализация BarTender"""
+        try:
+            if self.bar_tender_enable:
+                messagebox.showinfo("Info", "BarTender уже инициализирован!")
+                print("ℹ BarTender уже инициализирован")
+                return
+
+            self.btApp = win32.Dispatch("BarTender.Application")
+            self.btApp.Visible = False
+
+            self.bar_tender_enable = True
+            messagebox.showinfo("Success", "BarTender успешно инициализирован!")
+            print("✓ BarTender успешно инициализирован")
+
+        except Exception as e:
+            self.bar_tender_enable = False
+            self.btApp = None
+            error_msg = f"Ошибка инициализации BarTender: {str(e)}"
+            #messagebox.showerror("Error", error_msg)
+            print(f"✗ {error_msg}")
+
     # endregion
 
-    def Init_Interface(self):
+    # region ФУНКЦИИ ТЕРМИНАЛА
+    def create_console_frame(self, parent):
+        """Создает фрейм с консолью и элементами управления"""
+        # Главный фрейм
+        main_frame = CTk.CTkFrame(parent)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Фрейм для кнопок
+        button_frame = CTk.CTkFrame(main_frame)
+        button_frame.pack(fill="x", padx=5, pady=5)
+
+        # Кнопка очистки консоли
+        clear_btn = CTk.CTkButton(
+            button_frame, text="Очистить консоль", command=self.clear_console, width=120
+        )
+        clear_btn.pack(side="left", padx=5)
+
+        # Кнопка тестового вывода
+        test_btn = CTk.CTkButton(
+            button_frame, text="Версия", command=self.version_console_output, width=120
+        )
+        test_btn.pack(side="left", padx=5)
+
+        # Создаем консоль
+        self.console = SimpleConsole(main_frame, height=400)
+        self.console.pack(fill="both", expand=True, padx=5, pady=5)
+
+        return main_frame
+
+    def clear_console(self):
+        """Очищает консоль"""
+        if hasattr(self, "console"):
+            self.console.clear()
+            print("Консоль очищена")
+
+    def version_console_output(self):
+        """Тестовый вывод в консоль"""
+        print("=" * 50)
+        print("ТЕСТОВЫЙ ВЫВОД В КОНСОЛЬ")
+        print(
+            f"Время: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        print("Это сообщение выведено через print()")
+        print("Версия программы: v.1, enfora@mail.ru")
+        print("=" * 50)
+
+    # endregion
+
+    def Init_Interface_Settings(self):
 
         # region НАЧАЛЬНЫЕ УСТАНОВКИ ОКНА
         CTk.set_appearance_mode("Light")  # "Dark", "Light", "System"
@@ -105,6 +348,9 @@ class App(CTk.CTk):
         """Создание вкладок"""
         tab_workarea = tabview.add("Рабочая область")
         tab_settings = tabview.add("Настройки")
+        tab_console = tabview.add("Консоль")
+
+        self.create_console_frame(tab_console)
 
         # Заголовок
         CTk.CTkLabel(
@@ -124,7 +370,7 @@ class App(CTk.CTk):
             frameButtons,
             text="Сохранить настройки",
             width=120,
-            # command=self.save_settings,
+            command=self.save_settings,
         )
         save_button.pack(side="left", padx=(0, 10))
 
@@ -132,7 +378,7 @@ class App(CTk.CTk):
             frameButtons,
             text="Загрузить настройки",
             width=120,
-            # command=self.load_settings,
+            command=self.load_settings,
         )
         load_button.pack(side="left")
         # endregion
@@ -160,7 +406,12 @@ class App(CTk.CTk):
         self.template_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
         # Кнопка выбора файла
         btw_browse_button = CTk.CTkButton(
-            input_frame, text="...", width=50, command=self.browse_btw_file
+            input_frame,
+            text="...",
+            width=50,
+            hover=True,
+            hover_color="blue",
+            command=self.browse_btw_file,
         )
         btw_browse_button.pack(side="right")
         # endregion
@@ -187,7 +438,14 @@ class App(CTk.CTk):
             pdf_frame, placeholder_text="Путь к каталогу pdf", height=35
         )
         self.pdf_puth.pack(side="left", fill="x", expand=True, padx=(5, 10))
-        self.pdf_browse_button = CTk.CTkButton(pdf_frame, text="...", width=50)
+        self.pdf_browse_button = CTk.CTkButton(
+            pdf_frame,
+            text="...",
+            width=50,
+            hover_color="blue",
+            hover=True,
+            command=self.browse_directory_pdf,
+        )
         self.pdf_browse_button.pack(side="right")
         # endregion
 
@@ -211,11 +469,17 @@ class App(CTk.CTk):
             jpg_frame, placeholder_text="Путь к каталогу jpg", height=30
         )
         self.jpg_puth.pack(side="left", fill="x", expand=True, padx=(5, 10))
-        self.jpg_browse_button = CTk.CTkButton(jpg_frame, text="...", width=50)
+        self.jpg_browse_button = CTk.CTkButton(
+            jpg_frame,
+            text="...",
+            width=50,
+            hover=True,
+            hover_color="blue",
+            command=self.browse_directory_jpg,
+        )
         self.jpg_browse_button.pack(side="right")
         # endregion
 
-        # -------------------------------- Фрейм для ввода IP адреса ---------------------------
         # region Фрейм для поля ввода IP адреса
 
         CTk.CTkLabel(
@@ -331,3 +595,19 @@ class App(CTk.CTk):
         )
         self.total_printer_combo.pack(side="left", fill="x", expand=True)
         # endregion
+
+        # ОТРИСОВКА РАБОЧЕЙ ОБЛАСТИ
+
+        # Кнопки вверху слева
+        button_frame = CTk.CTkFrame(tab_workarea, fg_color="transparent", height=40)
+        button_frame.pack(side="top", anchor="nw", fill="x", pady=(0, 10), padx=10)
+
+        self.action_button = CTk.CTkButton(
+            button_frame,
+            text="Инициализация BarTender",
+            width=120,
+            height=35,
+            font=CTk.CTkFont(size=12, weight="bold"),
+            command=self.initialize_bar_tender,
+        )
+        self.action_button.pack(side="left", padx=(0, 10))
