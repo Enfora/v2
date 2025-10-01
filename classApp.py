@@ -5,6 +5,8 @@ import tkinter.messagebox as messagebox
 import os
 import json
 import sys
+import win32com.client as win32
+
 
 class SimpleConsole(CTk.CTkTextbox):
     """
@@ -50,6 +52,7 @@ class SimpleConsole(CTk.CTkTextbox):
         """Восстанавливает оригинальный stdout при уничтожении"""
         sys.stdout = self.old_stdout
         super().destroy()
+
 
 class App(CTk.CTk):
     def __init__(self):
@@ -276,7 +279,7 @@ class App(CTk.CTk):
             self.bar_tender_enable = False
             self.btApp = None
             error_msg = f"Ошибка инициализации BarTender: {str(e)}"
-            #messagebox.showerror("Error", error_msg)
+            # messagebox.showerror("Error", error_msg)
             print(f"✗ {error_msg}")
 
     # endregion
