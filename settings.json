@@ -1,10 +1,8 @@
 {
   "checkbox_jpg": true,
   "checkbox_pdf": true,
-  "checkbox_png": false,
   "jpg_entry": "C:/learn/v2/files",
   "pdf_entry": "C:/learn/v2/files",
-  "png_entry": "",
   "template_entry": "C:/learn/v2/files/main.btw",
   "ip_address": "192.168.77.29",
   "pieces_entry": "6",

@@ -7,6 +7,10 @@ import json
 import sys
 import win32com.client as win32
 
+import asyncio
+import aiohttp
+import threading
+
 
 class SimpleConsole(CTk.CTkTextbox):
     """
@@ -72,6 +76,86 @@ class App(CTk.CTk):
             print("⚠ Получение списка принтеров доступно")
 
         self.load_settings()
+
+        # Запускаем мониторинг весов в отдельном потоке
+        self.start_weight_monitoring()
+
+    def start_weight_monitoring(self):
+        """Запуск мониторинга весов в отдельном потоке с asyncio"""
+
+        def run_async():
+            # Создаем новый event loop для этого потока
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+
+                ip_address = self.ip_address.get().strip()
+
+                url = f"http://{ip_address}/rawdata.html"
+                loop.run_until_complete(self.basic_get(url))
+            finally:
+                loop.close()
+
+        # Запускаем в отдельном потоке
+        thread = threading.Thread(target=run_async, daemon=True)
+        thread.start()
+
+    async def basic_get(self, url):
+        """Асинхронный мониторинг весов"""
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    async with session.get(url, timeout=2) as response:
+
+                        # ✅ Проверяем статус ответа
+                        if response.status != 200:
+                            print(
+                                f"❌ Ошибка HTTP: {response.status} - {response.reason}"
+                            )
+                            await asyncio.sleep(1)
+                            continue
+
+                        # ✅ Получаем и обрабатываем данные
+                        data = await response.text()
+                        listData = data.strip().split("\n")
+
+                        # ✅ Проверяем что данные не пустые
+                        if not listData or not listData[0].strip():
+                            print("⚠️ Получены пустые данные от весов")
+                            await asyncio.sleep(0.2)
+                            continue
+
+                        # ✅ Пытаемся преобразовать в число
+                        weight_value = float(listData[0])
+                        weight_value = (
+                            weight_value if weight_value >= 0 else 0
+                        )  # Тернарный оператор
+                        # print(f"✅ Вес: {weight_value:.3f} кг")
+
+                        # Обновляем интерфейс в главном потоке
+                        self.current_weight.configure(text=f"{weight_value:.3f} кг")
+                        # self.after(0, lambda: self.update_weight_display(weight_value))
+
+                except asyncio.TimeoutError:
+                    print("⏰ Таймаут: Весы не ответили за 2 секунды")
+                except aiohttp.ClientError as e:
+                    print(f"🌐 Ошибка соединения: {e}")
+                except ValueError as e:
+                    print(f"🔢 Ошибка данных: не могу преобразовать в число")
+                except IndexError:
+                    print("📋 Ошибка: недостаточно данных в ответе")
+                except Exception as e:
+                    print(f"⚠️ Неизвестная ошибка: {e}")
+
+                # Задержка перед следующим запросом (даже при ошибках)
+                await asyncio.sleep(0.012)
+
+    def update_weight_display(self, weight_value):
+        """Обновление отображения веса в интерфейсе"""
+        try:
+            self.current_weight.configure(text=f"{weight_value:.3f} кг")
+        except Exception as e:
+            print(f"Ошибка обновления интерфейса: {e}")
 
     # region Вспомогательные ФУНКЦИИ
     def validate_numeric_input(self, new_text):  # Валидация цифр
