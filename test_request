@@ -1,0 +1,62 @@
+import os
+import asyncio
+import aiohttp
+
+def clear_console():
+    os.system("cls")
+
+async def basic_get(url):
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(url, timeout=2) as response:
+                    
+                    # ✅ Проверяем статус ответа
+                    if response.status != 200:
+                        print(f"❌ Ошибка HTTP: {response.status} - {response.reason}")
+                        await asyncio.sleep(1)
+                        continue
+                    
+                    # ✅ Получаем и обрабатываем данные
+                    data = await response.text()
+                    listData = data.strip().split("\n")
+                    
+                    # ✅ Проверяем что данные не пустые
+                    if not listData or not listData[0].strip():
+                        print("⚠️ Получены пустые данные от весов")
+                        await asyncio.sleep(0.2)
+                        continue
+                    
+                    # ✅ Пытаемся преобразовать в число
+                    weight_value = float(listData[0])
+                    weight_value = weight_value if weight_value >= 0 else 0   #Тернарный оператор
+                    print(f"✅ Вес: {weight_value:.3f} кг")
+                    
+            except asyncio.TimeoutError:
+                print("⏰ Таймаут: Весы не ответили за 2 секунды")
+            except aiohttp.ClientError as e:
+                print(f"🌐 Ошибка соединения: {e}")
+            except ValueError as e:
+                print(f"🔢 Ошибка данных: не могу преобразовать '{listData[0]}' в число")
+            except IndexError:
+                print("📋 Ошибка: недостаточно данных в ответе")
+            except Exception as e:
+                print(f"⚠️ Неизвестная ошибка: {e}")
+            
+            # Задержка перед следующим запросом (даже при ошибках)
+            await asyncio.sleep(0.012)
+
+if __name__ == "__main__":
+    clear_console()
+    
+    ip_address = "192.168.77.29"
+    url = f"http://{ip_address}/rawdata.html"
+
+    print("🚀 Запуск мониторинга весов")
+    print("📡 Подключение к:", url)
+    print("⏹️  Нажмите Ctrl+C для остановки\n")
+    
+    try:
+        asyncio.run(basic_get(url))
+    except KeyboardInterrupt:
+        print("\n👋 Мониторинг остановлен пользователем")

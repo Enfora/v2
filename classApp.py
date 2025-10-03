@@ -605,7 +605,7 @@ class App(CTk.CTk):
         button_frame = CTk.CTkFrame(tab_workarea, fg_color="transparent", height=40)
         button_frame.pack(side="top", anchor="nw", fill="x", pady=(0, 10), padx=10)
 
-        self.action_button = CTk.CTkButton(
+        init_button_bartender = CTk.CTkButton(
             button_frame,
             text="Инициализация BarTender",
             width=120,
@@ -613,4 +613,21 @@ class App(CTk.CTk):
             font=CTk.CTkFont(size=12, weight="bold"),
             command=self.initialize_bar_tender,
         )
-        self.action_button.pack(side="left", padx=(0, 10))
+        init_button_bartender.pack(side="left", padx=(0, 10))
+
+        # Фрейм для вывода текущего веса
+        current_weight_frame = CTk.CTkFrame(
+            tab_workarea, height=100, fg_color="black", corner_radius=10
+        )
+        current_weight_frame.pack(side="top", fill="x", padx=10, pady=10)
+
+        # Поле для отображения веса
+        self.current_weight = CTk.CTkLabel(
+            current_weight_frame,
+            text="0.000 кг",
+            font=CTk.CTkFont(family="Digital-7 Mono", size=100),
+            text_color="#00FF00",
+            fg_color="black",
+            bg_color="black",
+        )
+        self.current_weight.pack(expand=True, fill="both", padx=20, pady=20)
