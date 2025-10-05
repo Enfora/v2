@@ -1,14 +1,14 @@
 {
   "checkbox_jpg": true,
   "checkbox_pdf": true,
-  "jpg_entry": "C:/learn/v2/files",
-  "pdf_entry": "C:/learn/v2/files",
-  "template_entry": "C:/learn/v2/files/main.btw",
+  "jpg_entry": "C:/learn/v2/files/jpg",
+  "pdf_entry": "C:/learn/v2/files/pdf",
+  "template_entry": "C:/learn/v2/files/ФаршДОМАШНИЙ.btw",
   "ip_address": "192.168.77.29",
   "pieces_entry": "6",
-  "unit_printer": "Microsoft Print to PDF",
+  "unit_printer": "TSC TE210",
   "total_printer": "Microsoft Print to PDF",
-  "stability_threshold": "6",
-  "poll_interval": "1",
-  "zero_threshold": "20"
+  "stability_threshold": "3",
+  "poll_interval": "0.01",
+  "zero_threshold": "0.02"
 }

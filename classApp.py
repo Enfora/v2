@@ -1,3 +1,7 @@
+from settings_manager import save_settings_manager, load_settings_manager
+from interface_manager import Init_Interface_Settings_manager
+
+
 import customtkinter as CTk
 import win32print
 import tkinter.filedialog as filedialog
@@ -5,11 +9,13 @@ import tkinter.messagebox as messagebox
 import os
 import json
 import sys
+import time
 import win32com.client as win32
 
 import asyncio
 import aiohttp
 import threading
+
 
 
 class SimpleConsole(CTk.CTkTextbox):
@@ -66,6 +72,13 @@ class App(CTk.CTk):
         self.bar_tender_enable = False
         self.btApp = None
 
+        # Взвешивание
+        self.getWeightEnable = False
+        
+        self.stable_counter = int(0)
+        self.array_weight = list()
+        self.stable_weight = 0
+
         # Проверяем доступность win32print в конструкторе
         self.WIN32PRINT_AVAILABLE = self.check_win32print_availability()
         self.available_printers = self.get_available_printers()
@@ -75,10 +88,29 @@ class App(CTk.CTk):
         if self.WIN32PRINT_AVAILABLE:
             print("⚠ Получение списка принтеров доступно")
 
-        self.load_settings()
+        load_settings_manager(self)  # Загружаем настройки
+
+        # Проверяем интервал опроса весов
+        self.poll_interval_current = float(1)
+        if self.poll_interval.get().strip() == "":
+            self.poll_interval_current = float(1)
+        else:
+            self.poll_interval_current = float(self.poll_interval.get())
+        print(f"Интервал опроса весов  = {self.poll_interval_current} сек.")
 
         # Запускаем мониторинг весов в отдельном потоке
         self.start_weight_monitoring()
+
+    def Init_Interface_Settings(self):
+        Init_Interface_Settings_manager(self)
+        
+    def getWeightThreading_Enable(self):
+        print("Старт взвешивания.")
+        self.getWeightEnable = True
+    
+    def getWeightThreading_Disable(self):
+        print("Окончание взвешивания.")
+        self.getWeightEnable = False
 
     def start_weight_monitoring(self):
         """Запуск мониторинга весов в отдельном потоке с asyncio"""
@@ -93,15 +125,18 @@ class App(CTk.CTk):
 
                 url = f"http://{ip_address}/rawdata.html"
                 loop.run_until_complete(self.basic_get(url))
+                
             finally:
                 loop.close()
 
         # Запускаем в отдельном потоке
         thread = threading.Thread(target=run_async, daemon=True)
         thread.start()
+        
 
     async def basic_get(self, url):
         """Асинхронный мониторинг весов"""
+        
         async with aiohttp.ClientSession() as session:
             while True:
                 try:
@@ -130,11 +165,12 @@ class App(CTk.CTk):
                         weight_value = (
                             weight_value if weight_value >= 0 else 0
                         )  # Тернарный оператор
-                        # print(f"✅ Вес: {weight_value:.3f} кг")
+                        # print(f"✅ Вес: {weight_value:.3f}")
 
                         # Обновляем интерфейс в главном потоке
-                        self.current_weight.configure(text=f"{weight_value:.3f} кг")
-                        # self.after(0, lambda: self.update_weight_display(weight_value))
+                        self.update_weight_display(weight_value)
+                        self.update_weight_table(weight_value)
+
 
                 except asyncio.TimeoutError:
                     print("⏰ Таймаут: Весы не ответили за 2 секунды")
@@ -148,16 +184,91 @@ class App(CTk.CTk):
                     print(f"⚠️ Неизвестная ошибка: {e}")
 
                 # Задержка перед следующим запросом (даже при ошибках)
-                await asyncio.sleep(0.012)
+
+                await asyncio.sleep(self.poll_interval_current)
 
     def update_weight_display(self, weight_value):
         """Обновление отображения веса в интерфейсе"""
         try:
-            self.current_weight.configure(text=f"{weight_value:.3f} кг")
+            self.current_weight.configure(text=f"{weight_value:.3f}")
         except Exception as e:
             print(f"Ошибка обновления интерфейса: {e}")
 
+    def update_weight_table (self, weight_value): # Вставка веса в таблицу
+        
+        if self.getWeightEnable != True:
+            weight_value = 0
+            return
+        
+        if weight_value <= float(self.zero_threshold.get()): # Если вес меньше или равен порогу нуля
+            self.array_weight.clear()
+            self.stable_weight = 0;
+            return
+
+        if len(self.array_weight)< float(self.stability_threshold.get()):
+            self.array_weight.append(weight_value)
+        else:
+            #проверка на стабильный вес
+            if len((set(self.array_weight))) == 1:
+
+                weight_value = self.array_weight[0]
+
+                rounded_weight = round(weight_value, 2) # округляем текущий вес
+                rounded_stable = round(self.stable_weight, 2) # округляем текущий вес
+
+                if abs (rounded_stable - rounded_weight)>=0.05:
+                    self.stable_weight = weight_value
+
+                    self.add_to_table (weight_value) # Выводим вес в таблицу
+                    self.activated_barTender_process(weight_value) #Вызываем бартендер но он в другом потоке
+
+            # Очищаем список
+            self.array_weight.clear()
+
+    # Функция вывода веса в таблицу
+    def add_to_table(self,weight_value): 
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        history_entry = f"{timestamp}    {weight_value:.3f} кг\n"
+
+        self.weights_table.configure(state="normal")
+        self.weights_table.insert("end", history_entry)
+        self.weights_table.see("end")
+        self.weights_table.configure(state="disabled")
+    
+    def activated_barTender_process(self, weight_value):
+        """Активация процесса печати - вызов в главном потоке"""
+        # Передаем задачу в главный поток
+        if self.bar_tender_enable != True:
+            print("BarTender не активирован.")
+            return
+        self.after(0, lambda: self._run_bar_tender_in_main_thread(weight_value))
+
+    def _run_bar_tender_in_main_thread(self, weight_value):
+        template_path = self.template_entry.get()
+        
+        jpg_path = self.jpg_path.get()
+        normalized_path_jpg = jpg_path.replace("/", "\\")
+        
+        temp_path_jpg = normalized_path_jpg + "\\temp_jpg.jpg"
+        
+        name_unit_printer = self.unit_printer_combo.get()
+
+        btFormat = self.btApp.Formats.Open(template_path, False, name_unit_printer)
+        
+        btFormat.SetNamedSubStringValue("bt_massa", weight_value)
+        btFormat.SetNamedSubStringValue("bt_shtrih", "230076200216")
+
+
+        btFormat.ExportToFile(temp_path_jpg, "JPEG", 1, 300, 1)
+        btFormat.IdenticalCopiesOfLabel = 1 
+        PrintName = "TSC TE210"
+        btFormat.PrintOut(True, False)  # Печать (ShowDialog, WaitUntilCompleted)
+
+        print (temp_path_jpg)
+
     # region Вспомогательные ФУНКЦИИ
+
+
     def validate_numeric_input(self, new_text):  # Валидация цифр
         """Функция проверяет что ввод содержит только цифры"""
         return new_text.isdigit() or new_text == ""
@@ -223,11 +334,11 @@ class App(CTk.CTk):
         return True
 
     def browse_directory_pdf(self):
-        self.browse_directory(self.pdf_puth)
+        self.browse_directory(self.pdf_path)
 
     def browse_directory_jpg(self):
         self.jpg_browse_button._state = "disabled"
-        self.browse_directory(self.jpg_puth)
+        self.browse_directory(self.jpg_path)
 
     def browse_directory(self, entry_widget):
         """Открыть диалог выбора директории"""
@@ -236,111 +347,29 @@ class App(CTk.CTk):
             entry_widget.delete(0, "end")
             entry_widget.insert(0, directory)
 
-    # ФУНКЦИИ СОХРАНЕНИЯ НАСТРОЕК
-    def save_settings(self):  # Запоминаем настройки в JSON
-        """Сохранение настроек в JSON файл"""
-        settings = {
-            "checkbox_jpg": bool(self.checkbox_jpg.get()),
-            "checkbox_pdf": bool(self.checkbox_pdf.get()),
-            "jpg_entry": self.jpg_puth.get(),
-            "pdf_entry": self.pdf_puth.get(),
-            "template_entry": self.template_entry.get(),
-            "ip_address": self.ip_address.get(),
-            "pieces_entry": self.pieces_entry.get(),
-            "unit_printer": self.unit_printer_combo.get(),
-            "total_printer": self.total_printer_combo.get(),
-            "stability_threshold": self.stability_threshold.get(),
-            "poll_interval": self.poll_interval.get(),
-            "zero_threshold": self.zero_threshold.get(),
-        }
+    #Функции работы с таблицей
 
-        try:
-            with open("settings.json", "w", encoding="utf-8") as f:
-                json.dump(settings, f, ensure_ascii=False, indent=2)
-            # messagebox.showinfo("Успех", "Настройки успешно сохранены в settings.json")
-            print("✓ Настройки успешно сохранены в settings.json")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки: {e}")
-            print(f"✗ Ошибка сохранения настроек: {e}")
+    def clear_table(self):
+        self.weights_table.configure(state="normal")
+        self.weights_table.delete("1.0", "end")
+
+        # Добавляем обратно заголовки
+        header = "ВРЕМЯ                  ВЕС (кг)\n"
+        header += "─────────────────────────────────\n"
+        self.weights_table.insert("1.0", header)
+        self.weights_table.configure(state="disabled")
+
+        print("Таблица истории очищена")
+
+
+    # ----------------------------------------------------------------
+
+    # ФУНКЦИИ СОХРАНЕНИЯ НАСТРОЕК, вынесены в отдельный файл
+    def save_settings(self):
+        save_settings_manager(self)
 
     def load_settings(self):
-        """Загрузка настроек из JSON файла"""
-        try:
-            if not os.path.exists("settings.json"):
-                messagebox.showinfo("Информация", "Файл настроек не найден.")
-                print(
-                    "ℹ Файл настроек не найден. Будут использованы настройки по умолчанию."
-                )
-                return
-
-            with open("settings.json", "r", encoding="utf-8") as f:
-                settings = json.load(f)
-
-            # Заполняем поля ввода
-            self.template_entry.delete(0, "end")
-            self.template_entry.insert(0, settings.get("template_entry", ""))
-
-            self.pdf_puth.delete(0, "end")
-            self.pdf_puth.insert(0, settings.get("pdf_entry", ""))
-
-            self.jpg_puth.delete(0, "end")
-            self.jpg_puth.insert(0, settings.get("jpg_entry", ""))
-
-            # Заполняем поле IP адреса
-            self.ip_address.delete(0, "end")
-            self.ip_address.insert(0, settings.get("ip_address", ""))
-
-            # Заполняем поле количества штук в пачке
-            self.pieces_entry.delete(0, "end")
-            self.pieces_entry.insert(0, settings.get("pieces_entry", ""))
-
-            # Стабильность взвешиваний
-            self.stability_threshold.delete(0, "end")
-            self.stability_threshold.insert(0, settings.get("stability_threshold", ""))
-
-            # Интервал опроса весов
-            self.poll_interval.delete(0, "end")
-            self.poll_interval.insert(0, settings.get("poll_interval", ""))
-
-            # Порог нуля
-            self.zero_threshold.delete(0, "end")
-            self.zero_threshold.insert(0, settings.get("zero_threshold", ""))
-
-            # Заполняем выпадающие списки принтеров
-            unit_printer = settings.get("unit_printer", "")
-            if unit_printer in self.available_printers:
-                self.unit_printer_combo.set(unit_printer)
-            elif self.available_printers:
-                self.unit_printer_combo.set(self.available_printers[0])
-
-            total_printer = settings.get("total_printer", "")
-            if total_printer in self.available_printers:
-                self.total_printer_combo.set(total_printer)
-            elif self.available_printers:
-                self.total_printer_combo.set(self.available_printers[0])
-
-            # Устанавливаем чекбоксы
-            if settings.get("checkbox_pdf", False):
-                self.checkbox_pdf.select()
-            else:
-                self.checkbox_pdf.deselect()
-
-            if settings.get("checkbox_jpg", False):
-                self.checkbox_jpg.select()
-            else:
-                self.checkbox_jpg.deselect()
-
-            # messagebox.showinfo("Успех", "Настройки успешно загружены")
-            print("✓ Настройки успешно загружены из settings.json")
-
-        except json.JSONDecodeError:
-            messagebox.showerror(
-                "Ошибка", "Файл настроек поврежден или имеет неверный формат."
-            )
-            print("✗ Ошибка: Файл настроек поврежден или имеет неверный формат.")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось загрузить настройки: {e}")
-            print(f"✗ Ошибка загрузки настроек: {e}")
+        load_settings_manager(self)
 
     # ФУНКЦИИ ИНИЦИАЛИЗАЦИИ BARTENDER
 
@@ -366,7 +395,7 @@ class App(CTk.CTk):
             # messagebox.showerror("Error", error_msg)
             print(f"✗ {error_msg}")
 
-    # endregion
+    
 
     # region ФУНКЦИИ ТЕРМИНАЛА
     def create_console_frame(self, parent):
@@ -415,303 +444,3 @@ class App(CTk.CTk):
         print("=" * 50)
 
     # endregion
-
-    def Init_Interface_Settings(self):
-
-        # region НАЧАЛЬНЫЕ УСТАНОВКИ ОКНА
-        CTk.set_appearance_mode("Light")  # "Dark", "Light", "System"
-        CTk.set_default_color_theme("dark-blue")  # "blue", "green", "dark-blue"
-
-        # region Окно и заголовок программы
-        self.geometry("1024x768")
-        self.resizable = (False, False)  # type: ignore
-        self.title("Оболочка для сетевых весов. Enfora@2025")
-        # endregion
-
-        # Создаем вкладки TabView
-        tabview = CTk.CTkTabview(self)
-        tabview.pack(padx=10, pady=10, fill="both", expand=True)
-
-        """Создание вкладок"""
-        tab_workarea = tabview.add("Рабочая область")
-        tab_settings = tabview.add("Настройки")
-        tab_console = tabview.add("Консоль")
-
-        self.create_console_frame(tab_console)
-
-        # Заголовок
-        CTk.CTkLabel(
-            tab_settings,
-            text="Общие настройки весов и шаблонов",
-            font=CTk.CTkFont(size=16, weight="bold"),
-        ).pack(pady=10)
-        # endregion
-
-        # region КНОПКИ СОХРАНЕНИЯ НАСТРОЕК
-        frameButtons = CTk.CTkFrame(
-            tab_settings, fg_color="transparent", bg_color="lightgray", height=40
-        )
-        frameButtons.pack(side="top", anchor="nw", fill="x", pady=(0, 10), padx=10)
-
-        save_button = CTk.CTkButton(  # Кнопка Сохранить настройки
-            frameButtons,
-            text="Сохранить настройки",
-            width=120,
-            command=self.save_settings,
-        )
-        save_button.pack(side="left", padx=(0, 10))
-
-        load_button = CTk.CTkButton(  # Кнопка Загрузить настройки
-            frameButtons,
-            text="Загрузить настройки",
-            width=120,
-            command=self.load_settings,
-        )
-        load_button.pack(side="left")
-        # endregion
-
-        # Фрейм для области настроек
-        setting_frame = CTk.CTkFrame(tab_settings, fg_color="lightgrey")
-        setting_frame.pack(side="top", fill="both", expand=True, pady=5, padx=10)
-
-        # region BarTender файл
-        # Подзаголовок
-        CTk.CTkLabel(
-            setting_frame,
-            text="Путь к шаблону этикетки (только .btw файлы):",
-            font=CTk.CTkFont(weight="bold"),
-        ).pack(anchor="w", padx=10, pady=(10, 0))
-
-        # Фрейм для поля ввода и кнопки
-        input_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        input_frame.pack(fill="x", padx=10, pady=(5, 10))
-
-        # Поле ввода для пути к .btw файлу
-        self.template_entry = CTk.CTkEntry(
-            input_frame, placeholder_text="Выберите файл .btw...", height=35
-        )
-        self.template_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        # Кнопка выбора файла
-        btw_browse_button = CTk.CTkButton(
-            input_frame,
-            text="...",
-            width=50,
-            hover=True,
-            hover_color="blue",
-            command=self.browse_btw_file,
-        )
-        btw_browse_button.pack(side="right")
-        # endregion
-
-        # region PDF
-
-        # Фрейм для экспорта в PDF
-        pdf_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        pdf_frame.pack(fill="x", padx=10, pady=(5, 10))
-
-        # Чекбокс, путь к файлу, кнопка выбора каталога PDF
-        self.checkbox_pdf = CTk.CTkCheckBox(
-            pdf_frame,
-            text="Запись в pdf",
-            hover=True,
-            border_width=2,
-            bg_color="transparent",
-            corner_radius=5,
-            border_color="blue",
-        )
-        self.checkbox_pdf.pack(side="left", padx=(5, 5))
-
-        self.pdf_puth = CTk.CTkEntry(
-            pdf_frame, placeholder_text="Путь к каталогу pdf", height=35
-        )
-        self.pdf_puth.pack(side="left", fill="x", expand=True, padx=(5, 10))
-        self.pdf_browse_button = CTk.CTkButton(
-            pdf_frame,
-            text="...",
-            width=50,
-            hover_color="blue",
-            hover=True,
-            command=self.browse_directory_pdf,
-        )
-        self.pdf_browse_button.pack(side="right")
-        # endregion
-
-        # region JPG
-        jpg_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        jpg_frame.pack(fill="x", padx=10, pady=(5, 10))
-
-        # Чекбокс, путь к файлу, кнопка выбора каталога JPG
-        self.checkbox_jpg = CTk.CTkCheckBox(
-            jpg_frame,
-            text="Запись в jpg",
-            hover=True,
-            border_width=2,
-            bg_color="transparent",
-            corner_radius=5,
-            border_color="blue",
-        )
-        self.checkbox_jpg.pack(side="left", padx=(5, 5))
-
-        self.jpg_puth = CTk.CTkEntry(
-            jpg_frame, placeholder_text="Путь к каталогу jpg", height=30
-        )
-        self.jpg_puth.pack(side="left", fill="x", expand=True, padx=(5, 10))
-        self.jpg_browse_button = CTk.CTkButton(
-            jpg_frame,
-            text="...",
-            width=50,
-            hover=True,
-            hover_color="blue",
-            command=self.browse_directory_jpg,
-        )
-        self.jpg_browse_button.pack(side="right")
-        # endregion
-
-        # region Фрейм для поля ввода IP адреса
-
-        CTk.CTkLabel(
-            setting_frame,
-            text="Настройки весов (IP адрес, определение стабильного веса, интервал опроса весов, порог нуля (г.), количество штук в пачке):",
-            font=CTk.CTkFont(weight="bold"),
-        ).pack(anchor="w", padx=10, pady=(20, 0))
-
-        ip_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        ip_frame.pack(fill="x", padx=10, pady=(5, 10))
-
-        # Поле ввода для IP адреса с маской
-        self.ip_address = CTk.CTkEntry(
-            ip_frame,
-            placeholder_text="Введите IP адрес",
-            height=35,
-        )
-        self.ip_address.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        # endregion
-
-        # region stability_threshold - Количество стабильных взвешиваний
-
-        self.stability_threshold = CTk.CTkEntry(
-            ip_frame,
-            placeholder_text="Кол-во стаб.",
-            height=35,
-        )
-        vcmd = (self.register(self.validate_numeric_input), "%P")
-        self.stability_threshold.configure(validate="key", validatecommand=vcmd)
-        self.stability_threshold.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        # endregion
-
-        # region poll_interval - Интервал опроса весов
-
-        self.poll_interval = CTk.CTkEntry(
-            ip_frame,
-            placeholder_text="Интервал опроса, с",
-            height=35,
-        )
-        vcmd = (self.register(self.validate_float_input), "%P")
-        self.poll_interval.configure(validate="key", validatecommand=vcmd)
-        self.poll_interval.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        # endregion
-
-        # region zero_threshold - Порог нуля
-        self.zero_threshold = CTk.CTkEntry(
-            ip_frame,
-            placeholder_text="Порог нуля, г.",
-            height=35,
-        )
-        vcmd = (self.register(self.validate_float_input), "%P")
-        self.zero_threshold.configure(validate="key", validatecommand=vcmd)
-        self.zero_threshold.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        # endregion
-
-        # region Количество штук в пачке
-        self.pieces_entry = CTk.CTkEntry(
-            ip_frame,
-            placeholder_text="Кол. штук в пачке",
-            height=35,
-        )
-        vcmd = (self.register(self.validate_numeric_input), "%P")
-        self.pieces_entry.configure(validate="key", validatecommand=vcmd)
-        self.pieces_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        # endregion
-
-        # region Фрейм для принтеров ---------------------------
-
-        CTk.CTkLabel(
-            setting_frame,
-            text="Настройки принтеров:",
-            font=CTk.CTkFont(weight="bold"),
-        ).pack(anchor="w", padx=10, pady=(20, 0))
-
-        # Фрейм для принтера штучной этикетки
-        unit_printer_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        unit_printer_frame.pack(fill="x", padx=10, pady=(5, 5))
-
-        CTk.CTkLabel(
-            unit_printer_frame,
-            text="Принтер штучной этикетки:",
-            font=CTk.CTkFont(weight="bold"),
-        ).pack(anchor="w", side="left", padx=(0, 10))
-
-        # Выпадающий список для принтера штучной этикетки
-        self.unit_printer_combo = CTk.CTkComboBox(
-            unit_printer_frame,
-            values=self.available_printers,  # Функция для определения списка доступных принтеров
-            height=35,
-            width=300,
-            state="normal",
-            hover=True,
-        )
-        self.unit_printer_combo.pack(side="left", fill="x", expand=True)
-
-        # Фрейм для принтера общей этикетки
-        total_printer_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        total_printer_frame.pack(fill="x", padx=10, pady=(5, 10))
-
-        CTk.CTkLabel(
-            total_printer_frame,
-            text="Принтер общей этикетки:",
-            font=CTk.CTkFont(weight="bold"),
-        ).pack(anchor="w", side="left", padx=(0, 10))
-
-        # Выпадающий список для принтера общей этикетки
-        self.total_printer_combo = CTk.CTkComboBox(
-            total_printer_frame,
-            values=self.available_printers,
-            height=35,
-            width=300,
-            state="normal",
-        )
-        self.total_printer_combo.pack(side="left", fill="x", expand=True)
-        # endregion
-
-        # ОТРИСОВКА РАБОЧЕЙ ОБЛАСТИ
-
-        # Кнопки вверху слева
-        button_frame = CTk.CTkFrame(tab_workarea, fg_color="transparent", height=40)
-        button_frame.pack(side="top", anchor="nw", fill="x", pady=(0, 10), padx=10)
-
-        init_button_bartender = CTk.CTkButton(
-            button_frame,
-            text="Инициализация BarTender",
-            width=120,
-            height=35,
-            font=CTk.CTkFont(size=12, weight="bold"),
-            command=self.initialize_bar_tender,
-        )
-        init_button_bartender.pack(side="left", padx=(0, 10))
-
-        # Фрейм для вывода текущего веса
-        current_weight_frame = CTk.CTkFrame(
-            tab_workarea, height=100, fg_color="black", corner_radius=10
-        )
-        current_weight_frame.pack(side="top", fill="x", padx=10, pady=10)
-
-        # Поле для отображения веса
-        self.current_weight = CTk.CTkLabel(
-            current_weight_frame,
-            text="0.000 кг",
-            font=CTk.CTkFont(family="Digital-7 Mono", size=100),
-            text_color="#00FF00",
-            fg_color="black",
-            bg_color="black",
-        )
-        self.current_weight.pack(expand=True, fill="both", padx=20, pady=20)
