@@ -6,11 +6,10 @@ import tkinter.messagebox as messagebox
 # ФУНКЦИИ СОХРАНЕНИЯ НАСТРОЕК
 def save_settings_manager(self):  # Запоминаем настройки в JSON
     settings_data = {
-        "checkbox_jpg": bool(self.checkbox_jpg.get()),
         "checkbox_pdf": bool(self.checkbox_pdf.get()),
-        "jpg_entry": self.jpg_path.get(),
         "pdf_entry": self.pdf_path.get(),
         "template_entry": self.template_entry.get(),
+        "template_entry_total": self.template_entry_total.get(),
         "ip_address": self.ip_address.get(),
         "pieces_entry": self.pieces_entry.get(),
         "unit_printer": self.unit_printer_combo.get(),
@@ -47,11 +46,12 @@ def load_settings_manager(self):
             self.template_entry.delete(0, "end")
             self.template_entry.insert(0, settings.get("template_entry", ""))
 
+            #     Заполняем поля ввода
+            self.template_entry_total.delete(0, "end")
+            self.template_entry_total.insert(0, settings.get("template_entry_total", ""))
+
             self.pdf_path.delete(0, "end")
             self.pdf_path.insert(0, settings.get("pdf_entry", ""))
-
-            self.jpg_path.delete(0, "end")
-            self.jpg_path.insert(0, settings.get("jpg_entry", ""))
 
             # Заполняем поле IP адреса
             self.ip_address.delete(0, "end")
@@ -91,11 +91,6 @@ def load_settings_manager(self):
                 self.checkbox_pdf.select()
             else:
                 self.checkbox_pdf.deselect()
-
-            if settings.get("checkbox_jpg", False):
-                self.checkbox_jpg.select()
-            else:
-                self.checkbox_jpg.deselect()
 
             # messagebox.showinfo("Успех", "Настройки успешно загружены")
 

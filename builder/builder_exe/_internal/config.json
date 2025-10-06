@@ -1,0 +1,24 @@
+{
+    "project_files": [
+        {
+            "Name": "test_Build",
+            "Directory": "C:/learn/test"
+        },
+        {
+            "Name": "HelloWorld",
+            "Directory": "C:/learn/builder_exe/Examples"
+        },
+        {
+            "Name": "Login-Demo",
+            "Directory": "C:/learn/builder_exe/Examples"
+        },
+        {
+            "Name": "Spotify-Demo",
+            "Directory": "C:/learn/builder_exe/Examples"
+        },
+        {
+            "Name": "Youtube-Demo",
+            "Directory": "C:/learn/builder_exe/Examples"
+        }
+    ]
+}

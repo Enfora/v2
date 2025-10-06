@@ -1,9 +1,8 @@
 {
-  "checkbox_jpg": true,
-  "checkbox_pdf": true,
-  "jpg_entry": "C:/learn/v2/files/jpg",
+  "checkbox_pdf": false,
   "pdf_entry": "C:/learn/v2/files/pdf",
   "template_entry": "C:/learn/v2/files/ФаршДОМАШНИЙ.btw",
+  "template_entry_total": "C:/learn/v2/files/ФаршДОМАШНИЙ.btw",
   "ip_address": "192.168.77.29",
   "pieces_entry": "6",
   "unit_printer": "TSC TE210",

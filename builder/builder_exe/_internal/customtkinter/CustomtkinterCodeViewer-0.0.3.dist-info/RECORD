@@ -1,0 +1,14 @@
+CustomtkinterCodeViewer-0.0.3.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+CustomtkinterCodeViewer-0.0.3.dist-info/METADATA,sha256=NwOZy2yaUZWDBK_H1D5RCPj8_05Wzuf-VqWXPMEAqoo,1515
+CustomtkinterCodeViewer-0.0.3.dist-info/RECORD,,
+CustomtkinterCodeViewer-0.0.3.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+CustomtkinterCodeViewer-0.0.3.dist-info/WHEEL,sha256=yQN5g4mg4AybRjkgi-9yy4iQEFibGQmlz78Pik5Or-A,92
+CustomtkinterCodeViewer-0.0.3.dist-info/top_level.txt,sha256=Xk9LBzcTn1dEF0ARDT6Op8r5EriFzy5xEHGsA_OHJmI,24
+CustomtkinterCodeViewer/CTkCodeViewer.py,sha256=n5pVqfel2opRvHf8vuVGgtLA542zyKyAiZ5pkbDf7OA,1361
+CustomtkinterCodeViewer/__init__.py,sha256=JKqi-B0r_CAaako6gH4BOia7SvKYoFJtEju57eb5d6w,49
+CustomtkinterCodeViewer/__pycache__/CTkCodeViewer.cpython-310.pyc,,
+CustomtkinterCodeViewer/__pycache__/__init__.cpython-310.pyc,,
+libname/CTkCodeViewer.py,sha256=n5pVqfel2opRvHf8vuVGgtLA542zyKyAiZ5pkbDf7OA,1361
+libname/__init__.py,sha256=Ktiz2yuFpQkIzLc41koeio0L3XKOhcxk77iEcB1bHaY,41
+libname/__pycache__/CTkCodeViewer.cpython-310.pyc,,
+libname/__pycache__/__init__.cpython-310.pyc,,

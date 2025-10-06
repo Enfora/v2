@@ -1,0 +1,13 @@
+{
+  "checkbox_pdf": true,
+  "pdf_entry": "C:/learn/v2/output",
+  "template_entry": "C:/learn/v2/files/ФаршДОМАШНИЙ.btw",
+  "template_entry_total": "C:/learn/v2/files/ФаршДОМАШНИЙ.btw",
+  "ip_address": "192.168.77.29",
+  "pieces_entry": "6",
+  "unit_printer": "TSC TE210",
+  "total_printer": "TSC TE210",
+  "stability_threshold": "3",
+  "poll_interval": "0.01",
+  "zero_threshold": "0.02"
+}

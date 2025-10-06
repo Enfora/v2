@@ -62,14 +62,15 @@ def Init_Interface_Settings_manager(self):
         setting_frame.pack(side="top", fill="both", expand=True, pady=5, padx=10)
 
         # region BarTender файл
+        
         # Подзаголовок
         CTk.CTkLabel(
             setting_frame,
-            text="Путь к шаблону этикетки (только .btw файлы):",
+            text="Пути к шаблонам этикеток (только .btw файлы):",
             font=CTk.CTkFont(weight="bold"),
         ).pack(anchor="w", padx=10, pady=(10, 0))
 
-        # Фрейм для поля ввода и кнопки
+        # Фрейм для поля ввода и кнопки Одиночной этикетки
         input_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
         input_frame.pack(fill="x", padx=10, pady=(5, 10))
 
@@ -78,6 +79,7 @@ def Init_Interface_Settings_manager(self):
             input_frame, placeholder_text="Выберите файл .btw...", height=35
         )
         self.template_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
         # Кнопка выбора файла
         btw_browse_button = CTk.CTkButton(
             input_frame,
@@ -88,6 +90,30 @@ def Init_Interface_Settings_manager(self):
             command=self.browse_btw_file,
         )
         btw_browse_button.pack(side="right")
+
+        # Общая этикетка
+        # Фрейм для поля ввода и кнопки 
+        input_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
+        input_frame.pack(fill="x", padx=10, pady=(5, 10))
+
+        # Поле ввода для пути к .btw файлу
+        self.template_entry_total = CTk.CTkEntry(
+             input_frame, placeholder_text="Выберите файл .btw...", height=35
+         )
+        self.template_entry_total.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        # Кнопка выбора файла
+        btw_browse_button = CTk.CTkButton(
+             input_frame,
+             text="...",
+             width=50,
+             hover=True,
+             hover_color="blue",
+             command=self.browse_btw_file_total,
+         )
+        btw_browse_button.pack(side="right")
+
+
         # endregion
 
         # region PDF
@@ -121,37 +147,6 @@ def Init_Interface_Settings_manager(self):
             command=self.browse_directory_pdf,
         )
         self.pdf_browse_button.pack(side="right")
-        # endregion
-
-        # region JPG
-        jpg_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        jpg_frame.pack(fill="x", padx=10, pady=(5, 10))
-
-        # Чекбокс, путь к файлу, кнопка выбора каталога JPG
-        self.checkbox_jpg = CTk.CTkCheckBox(
-            jpg_frame,
-            text="Запись в jpg",
-            hover=True,
-            border_width=2,
-            bg_color="transparent",
-            corner_radius=5,
-            border_color="blue",
-        )
-        self.checkbox_jpg.pack(side="left", padx=(5, 5))
-
-        self.jpg_path = CTk.CTkEntry(
-            jpg_frame, placeholder_text="Путь к каталогу jpg", height=30
-        )
-        self.jpg_path.pack(side="left", fill="x", expand=True, padx=(5, 10))
-        self.jpg_browse_button = CTk.CTkButton(
-            jpg_frame,
-            text="...",
-            width=50,
-            hover=True,
-            hover_color="blue",
-            command=self.browse_directory_jpg,
-        )
-        self.jpg_browse_button.pack(side="right")
         # endregion
 
         # region Фрейм для поля ввода IP адреса
@@ -228,19 +223,19 @@ def Init_Interface_Settings_manager(self):
             font=CTk.CTkFont(weight="bold"),
         ).pack(anchor="w", padx=10, pady=(20, 0))
 
-        # Фрейм для принтера штучной этикетки
-        unit_printer_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        unit_printer_frame.pack(fill="x", padx=10, pady=(5, 5))
+        # Фрейм для принтера
+        printer_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
+        printer_frame.pack(fill="x", padx=10, pady=(5, 5))
 
         CTk.CTkLabel(
-            unit_printer_frame,
+            printer_frame,
             text="Принтер штучной этикетки:",
             font=CTk.CTkFont(weight="bold"),
         ).pack(anchor="w", side="left", padx=(0, 10))
 
         # Выпадающий список для принтера штучной этикетки
         self.unit_printer_combo = CTk.CTkComboBox(
-            unit_printer_frame,
+            printer_frame,
             values=self.available_printers,  # Функция для определения списка доступных принтеров
             height=35,
             width=300,
@@ -249,19 +244,15 @@ def Init_Interface_Settings_manager(self):
         )
         self.unit_printer_combo.pack(side="left", fill="x", expand=True)
 
-        # Фрейм для принтера общей этикетки
-        total_printer_frame = CTk.CTkFrame(setting_frame, fg_color="transparent")
-        total_printer_frame.pack(fill="x", padx=10, pady=(5, 10))
-
         CTk.CTkLabel(
-            total_printer_frame,
+            printer_frame,
             text="Принтер общей этикетки:",
             font=CTk.CTkFont(weight="bold"),
         ).pack(anchor="w", side="left", padx=(0, 10))
 
         # Выпадающий список для принтера общей этикетки
         self.total_printer_combo = CTk.CTkComboBox(
-            total_printer_frame,
+            printer_frame,
             values=self.available_printers,
             height=35,
             width=300,

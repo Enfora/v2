@@ -319,6 +319,17 @@ class App(CTk.CTk):
             self.template_entry.delete(0, "end")
             self.template_entry.insert(0, file_path)
 
+    def browse_btw_file_total(self):
+        """Открыть диалог выбора .btw файла"""
+        file_path = filedialog.askopenfilename(
+            title="Выберите файл шаблона",
+            filetypes=[("Файлы шаблонов", "*.btw"), ("Все файлы", "*.*")],
+        )
+
+        if file_path and self.validate_btw_file(file_path):
+            self.template_entry_total.delete(0, "end")
+            self.template_entry_total.insert(0, file_path)
+
     def validate_btw_file(self, file_path):
         """Проверка, что файл имеет расширение .btw"""
         file_ext = os.path.splitext(file_path)[1].lower()
@@ -335,10 +346,6 @@ class App(CTk.CTk):
 
     def browse_directory_pdf(self):
         self.browse_directory(self.pdf_path)
-
-    def browse_directory_jpg(self):
-        self.jpg_browse_button._state = "disabled"
-        self.browse_directory(self.jpg_path)
 
     def browse_directory(self, entry_widget):
         """Открыть диалог выбора директории"""
