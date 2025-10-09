@@ -16,11 +16,16 @@ import asyncio
 import aiohttp
 import threading
 
+from tkcalendar import Calendar
+from datetime import datetime
+from datetime import date
+
 import barcode
 from barcode.writer import ImageWriter
 
 from io import BytesIO
 from PIL import ImageTk, Image
+
 
 class SimpleConsole(CTk.CTkTextbox):
     """
@@ -83,12 +88,23 @@ class App(CTk.CTk):
         self.stable_counter = int(0)
         self.array_weight = list()
         self.stable_weight = 0
+        self.data_for_bartender = date.today()
+        self.data_for_bartender = self.data_for_bartender.strftime(
+            "%d.%m.%Y"
+        )  # по умолчанию ставим текущую дату
+
+        self.count_pieces = 0  # счетчки взвешиваний, не может быть больше self.pieces_entry (поле на экране)
+
+        # Всплывающее окно для календаря
+        self.calendar_window = None
 
         # Проверяем доступность win32print в конструкторе
         self.WIN32PRINT_AVAILABLE = self.check_win32print_availability()
         self.available_printers = self.get_available_printers()
 
         self.Init_Interface_Settings()  # Отрисовка страницы настроек
+
+        self.initialize_bar_tender()  # Инициализация BarTender
 
         if self.WIN32PRINT_AVAILABLE:
             print("⚠ Получение списка принтеров доступно")
@@ -111,66 +127,22 @@ class App(CTk.CTk):
 
     def getWeightThreading_Enable(self):
         print("Старт взвешивания.")
+
         self.getWeightEnable = True
+
+        # Изменяем цвета фона у фрейма (табло веса)
+        self.current_weight_frame.configure(fg_color="#00920C")
+        # Переключатель тестовой печати ставим OFF
+        self.switch_demo.deselect()
 
     def getWeightThreading_Disable(self):
         print("Окончание взвешивания.")
         self.getWeightEnable = False
+        # Изменяем цвета фона у фрейма (табло веса)
+        self.current_weight_frame.configure(fg_color="#000000")
 
-    # region ТЕСТОВОЕ ВЗВЕШИВАНИЕ ДЛЯ ШТРИХКОДА
-    def generate_weight_test(self):
-        kg = random.randint(0, 99)
-        # Генерируем граммы от 0 до 999
-        grams = random.randint(0, 999)
-
-        weight = f"{kg}.{grams:03d}"
-
-        self.weight_entry_test.delete(0, "end")  # Очищаем поле
-        self.weight_entry_test.insert(0, str(weight))  # Вставляем сгенерированный вес
-
-        # Получаем артикул из поля
-        article = self.article_entry.get().strip()
-
-        if article:
-            # Форматируем вес в 5 цифр: 2 цифры кг + 3 цифры грамм
-            weight_for_barcode = f"{kg:02d}{grams:03d}"  # Всегда 6 цифр
-
-            # Прицепляем вес к артикулу
-            barcode_data = article + weight_for_barcode
-
-            print(f"Артикул: {article}")
-            print(f"Данные для штрих-кода: {barcode_data}")
-
-            # Генерируем штрих-код
-            try:
-                ean = barcode.get("ean13", barcode_data, writer=ImageWriter())
-
-                buffer = BytesIO()
-                ean.write(buffer)
-                buffer.seek(0)
-
-                pil_image = Image.open(buffer)
-                ctk_image = CTk.CTkImage(
-                    light_image=pil_image, dark_image=pil_image, size=(200, 80)
-                )
-
-                self.test_barcode_label.configure(image=ctk_image, text="")
-                print(f"Штрих-код сгенерирован: {barcode_data}")
-
-                # if self.bar_tender_enable != True:
-                #     print("BarTender не активирован.")
-                # return
-                self._run_bar_tender_in_main_thread(barcode_data, weight_for_barcode, False)
-
-            except Exception as e:
-                return
-
-                #print(f"Ошибка генерации штрих-кода: {e}")
-                #self.test_barcode_label.configure(text="Ошибка генерации")
-
-            print(f"Вес: {self.weight_entry_test.get()}")
-
-    # endregion
+    def switch_demo_printer(self):
+        pass
 
     def start_weight_monitoring(self):
         """Запуск мониторинга весов в отдельном потоке с asyncio"""
@@ -252,11 +224,15 @@ class App(CTk.CTk):
         except Exception as e:
             print(f"Ошибка обновления интерфейса: {e}")
 
-    def update_weight_table(self, weight_value):  # Вставка веса в таблицу
+    def update_weight_table(self, weight_value, test_mode=False):  # Вставка веса в таблицу
 
-        if self.getWeightEnable != True:
+        if self.getWeightEnable and test_mode: #Если режим взвешивания и это тестовый режим
             weight_value = 0
             return
+        
+        # if self.getWeightEnable != True and test_mode != True: #Если взвешивание не разрешено и это не тестовый режим
+        #     weight_value = 0
+        #     return
 
         if weight_value <= float(
             self.zero_threshold.get()
@@ -264,6 +240,12 @@ class App(CTk.CTk):
             self.array_weight.clear()
             self.stable_weight = 0
             return
+        
+        if test_mode:
+            #В тестовом режиме заполняем контейнер этим весом, эмулируя данные с весов
+            self.array_weight.clear() # очищаем
+            self.array_weight = [weight_value] * int(self.stability_threshold.get()) # Заполняем
+            self.stable_weight = weight_value #устанавливаем текущий вес 
 
         if len(self.array_weight) < float(self.stability_threshold.get()):
             self.array_weight.append(weight_value)
@@ -276,7 +258,7 @@ class App(CTk.CTk):
                 rounded_weight = round(weight_value, 2)  # округляем текущий вес
                 rounded_stable = round(self.stable_weight, 2)  # округляем текущий вес
 
-                if abs(rounded_stable - rounded_weight) >= 0.05:
+                if abs(rounded_stable - rounded_weight) >= 0.05 or rounded_weight == rounded_stable:
                     self.stable_weight = weight_value
 
                     self.add_to_table(weight_value)  # Выводим вес в таблицу
@@ -303,44 +285,7 @@ class App(CTk.CTk):
         if self.bar_tender_enable != True:
             print("BarTender не активирован.")
             return
-        #self.after(0, lambda: self._run_bar_tender_in_main_thread(weight_value))
-
-    def _run_bar_tender_in_main_thread(self, barcode_data, weight_for_barcode, print = False):
-        
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        temp_path_jpg = os.path.join(current_dir, "temp.JPG")
-
-        if os.path.exists(temp_path_jpg):
-            os.remove(temp_path_jpg)
-
-        template_path = self.template_entry.get()
-
-        name_unit_printer = self.unit_printer_combo.get()
-
-        btFormat = self.btApp.Formats.Open(template_path, False, name_unit_printer)
-
-        #btFormat = self.btApp.Formats.Open(template_path, False, "TSC TE210")
-        btFormat.SetNamedSubStringValue("bt_shtrih", barcode_data)
-        btFormat.SetNamedSubStringValue("bt_massa", weight_for_barcode)
-
-        btFormat.ExportToFile(temp_path_jpg, "JPEG", 1, 300, 1)
-        btFormat.IdenticalCopiesOfLabel = 1
-        PrintName = "TSC TE210"
-        #btFormat.PrintOut(True, False)  # Печать (ShowDialog, WaitUntilCompleted)
-        
-        imgShtrih = Image.open(temp_path_jpg)  # Укажите путь к вашему JPG файлу
-        imgShtrih = imgShtrih.resize((500, 400))  # Новый размер (ширина, высота)
-         
-        # Создаем CTkImage и обновляем существующую метку
-        new_photo = CTk.CTkImage(
-            light_image=imgShtrih,
-            dark_image=imgShtrih,
-            size=(350, 250)
-        )
-    
-        # Обновляем изображение в существующей метке
-        self.photo.configure(image=new_photo)
-        print(temp_path_jpg)
+        self.after(0, lambda: self.launch_bar_tender_in_main_thread(weight_value,))
 
     # region Вспомогательные ФУНКЦИИ
 
@@ -458,7 +403,7 @@ class App(CTk.CTk):
         """Инициализация BarTender"""
         try:
             if self.bar_tender_enable:
-                #messagebox.showinfo("Info", "BarTender уже инициализирован!")
+                # messagebox.showinfo("Info", "BarTender уже инициализирован!")
                 print("ℹ BarTender уже инициализирован")
                 return
 
@@ -466,7 +411,7 @@ class App(CTk.CTk):
             self.btApp.Visible = False
 
             self.bar_tender_enable = True
-            #messagebox.showinfo("Success", "BarTender успешно инициализирован!")
+            # messagebox.showinfo("Success", "BarTender успешно инициализирован!")
             print("✓ BarTender успешно инициализирован")
 
         except Exception as e:
@@ -521,5 +466,183 @@ class App(CTk.CTk):
         print("Это сообщение выведено через print()")
         print("Версия программы: v.1, enfora@mail.ru")
         print("=" * 50)
+
+    # endregion
+
+    # region КАЛЕНДАРЬ
+
+    def open_calendar(self):
+        if self.calendar_window is None or not self.calendar_window.winfo_exists():
+            # Создаем Toplevel окно (из tkinter)
+            self.calendar_window = CTk.CTkToplevel(self)
+            self.calendar_window.title("Выберите дату")
+            self.calendar_window.geometry("400x400")
+            self.calendar_window.transient(self)  # Поведение модального окна
+            self.calendar_window.grab_set()  # Захватываем фокус
+
+            # Центрируем окно
+            self.center_calendar_window()
+
+            # Создаем календарь (из tkcalendar)
+            calendar = Calendar(
+                self.calendar_window,
+                selectmode="day",
+                year=datetime.now().year,
+                month=datetime.now().month,
+                day=datetime.now().day,
+                date_pattern="dd.mm.yyyy",
+            )
+            calendar.pack(pady=20, padx=20, fill="both", expand=True)
+            # Кнопка подтверждения выбора
+            select_btn = CTk.CTkButton(
+                self.calendar_window,
+                text="Выбрать",
+                hover_color="#C0C0C0",
+                command=lambda: self.select_date(calendar),
+            )
+            select_btn.pack(pady=10)
+
+            # Кнопка отмены
+            cancel_btn = CTk.CTkButton(
+                self.calendar_window,
+                text="Отмена",
+                command=self.calendar_window.destroy,
+                fg_color="#424242",
+                hover_color="#C0C0C0",
+                border_width=1,
+            )
+            cancel_btn.pack(pady=5)
+        else:
+            self.calendar_window.lift()  # Поднимаем окно поверх других
+
+    def select_date(self, calendar):
+        """Обрабатывает выбор даты из календаря"""
+        selected_date = calendar.get_date()
+        self.data_for_bartender = selected_date
+
+        # self.date_entry.delete(0, "end")
+        # self.date_entry.insert(0, selected_date)
+
+        self.calendar_window.destroy()
+        self.calendar_window = None
+
+    def center_calendar_window(self):
+
+        # Обновляем геометрию чтобы получить актуальные размеры
+        self.calendar_window.update_idletasks()
+
+        # Получаем размеры главного окна
+        main_width = self.winfo_width()
+        main_height = self.winfo_height()
+        main_x = self.winfo_x()
+        main_y = self.winfo_y()
+
+        # Получаем размеры окна календаря
+        calendar_width = 400
+        calendar_height = 400
+
+        # Вычисляем позицию для центрирования относительно главного окна
+        x = main_x + (main_width - calendar_width) // 2
+        y = main_y + (main_height - calendar_height) // 2
+
+        # Устанавливаем позицию
+        self.calendar_window.geometry(f"{calendar_width}x{calendar_height}+{x}+{y}")
+
+    # endregion
+
+    # region ТЕСТОВОЕ ВЗВЕШИВАНИЕ ДЛЯ ШТРИХКОДА
+    def generate_weight_test(self):
+        kg = random.randint(0, 99)
+
+        # Генерируем граммы от 0 до 999
+        grams = random.randint(0, 999)
+
+        weight = f"{kg}.{grams:03d}"
+
+        self.weight_entry_test.delete(0, "end")  # Очищаем поле
+        self.weight_entry_test.insert(0, str(weight))  # Вставляем сгенерированный вес
+
+        # Получаем артикул из поля
+        article = self.article_entry.get().strip()
+
+        if article:
+            # Форматируем вес в 5 цифр: 2 цифры кг + 3 цифры грамм
+            weight_for_barcode = f"{kg:02d}{grams:03d}"  # Всегда 5 цифр
+
+            # Прицепляем вес к артикулу
+            barcode_data = article + weight_for_barcode
+
+            print(f"Артикул: {article}")
+            print(f"Данные для штрих-кода: {barcode_data}")
+
+            # Генерируем штрих-код
+            try:
+                ean = barcode.get("ean13", barcode_data, writer=ImageWriter())
+
+                buffer = BytesIO()
+                ean.write(buffer)
+                buffer.seek(0)
+
+                pil_image = Image.open(buffer)
+                ctk_image = CTk.CTkImage(
+                    light_image=pil_image, dark_image=pil_image, size=(200, 80)
+                )
+
+                self.test_barcode_label.configure(image=ctk_image, text="")
+                print(f"Штрих-код сгенерирован: {barcode_data}")
+
+                # if self.bar_tender_enable != True:
+                #     print("BarTender не активирован.")
+                # return
+                enable_demo_print = self.switch_demo.get()
+                self.launch_bar_tender_in_main_thread(barcode_data, float(weight), self.data_for_bartender, False)
+                self.update_weight_table(float(weight), True)
+
+            except Exception as e:
+                return
+
+                # print(f"Ошибка генерации штрих-кода: {e}")
+                # self.test_barcode_label.configure(text="Ошибка генерации")
+
+            print(f"Вес: {self.weight_entry_test.get()}")
+
+    # endregion
+
+    # region Заполнение шаблона этикетки BARTENDER
+
+    def launch_bar_tender_in_main_thread(self, barcode_data: str, weight: float, data_for_bartender: str, print=False):
+
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        temp_path_jpg = os.path.join(current_dir, "temp.JPG")
+
+        if os.path.exists(temp_path_jpg):
+            os.remove(temp_path_jpg)
+
+        template_path = self.template_entry.get()
+
+        name_unit_printer = self.unit_printer_combo.get()
+
+        btFormat = self.btApp.Formats.Open(template_path, False, name_unit_printer)
+
+        # btFormat = self.btApp.Formats.Open(template_path, False, "TSC TE210")
+        btFormat.SetNamedSubStringValue("bt_shtrih", barcode_data)
+        btFormat.SetNamedSubStringValue("bt_massa", weight)
+        btFormat.SetNamedSubStringValue("bt_data", data_for_bartender)
+
+        btFormat.ExportToFile(temp_path_jpg, "JPEG", 1, 300, 1)
+        btFormat.IdenticalCopiesOfLabel = 1
+        PrintName = "TSC TE210"
+        # btFormat.PrintOut(True, False)  # Печать (ShowDialog, WaitUntilCompleted)
+
+        imgShtrih = Image.open(temp_path_jpg)  # Укажите путь к вашему JPG файлу
+        imgShtrih = imgShtrih.resize((500, 400))  # Новый размер (ширина, высота)
+
+        # Создаем CTkImage и обновляем существующую метку
+        new_photo = CTk.CTkImage(
+            light_image=imgShtrih, dark_image=imgShtrih, size=(350, 250)
+        )
+
+        # Обновляем изображение в существующей метке
+        self.photo.configure(image=new_photo)
 
     # endregion

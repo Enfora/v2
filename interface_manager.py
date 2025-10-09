@@ -105,9 +105,7 @@ def Init_Interface_Settings_manager(self):
         font=CTk.CTkFont(size=14),
         image=CTk.CTkImage(
             light_image=Image.open("./Assets/dice.png"),  # путь к иконке
-            dark_image=Image.open(
-                "./Assets/dice.png"
-            ),  # та же иконка для темной темы
+            dark_image=Image.open("./Assets/dice.png"),  # та же иконка для темной темы
             size=(20, 20),  # размер иконки
         ),
         compound="left",  # иконка слева от текста
@@ -128,13 +126,28 @@ def Init_Interface_Settings_manager(self):
 
     # Метка для отображения штрих-кода
     self.test_barcode_label = CTk.CTkLabel(
-    article_frame,
-    text="Штрих-код",
-    width=200,
-    height=80,
-)
-    self.test_barcode_label.pack(side="left", padx=(25,10))
+        article_frame,
+        text="Штрих-код",
+        width=200,
+        height=80,
+    )
+    self.test_barcode_label.pack(side="left", padx=(25, 10))
     # endregion
+
+    #region Переключатель тестовой печати
+    self.switch_demo = CTk.CTkSwitch(
+        master=article_frame,
+        text="Тестовый режим, печать ",
+        corner_radius=15,
+        progress_color="#35bd00",
+        button_color="#003ee9",
+        command=self.switch_demo_printer
+    )
+    self.switch_demo.pack(side="left", padx=20,pady=20)
+
+
+    #endregion
+
 
     # region BarTender файл
 
@@ -384,22 +397,41 @@ def Init_Interface_Settings_manager(self):
     )
     clear_button_table.pack(side="left", padx=(0, 10))
 
-    # Фрейм для вывода текущего веса
-    current_weight_frame = CTk.CTkFrame(
-        tab_workarea, height=150, fg_color="black", corner_radius=10
+    # Кнопка для выбора календаря
+    calendar_btn = CTk.CTkButton(
+        button_frame,
+        text="Выбрать дату",
+        width=120,
+        height=35,
+        font=CTk.CTkFont(size=12, weight="bold"),
+        fg_color="#00008B",
+        image=CTk.CTkImage(
+            light_image=Image.open("./Assets/calendar.png"),  # путь к иконке
+            dark_image=Image.open(
+                "./Assets/calendar.png"
+            ),  # та же иконка для темной темы
+            size=(20, 20),  # размер иконки
+        ),
+        command=self.open_calendar,
     )
-    current_weight_frame.pack(side="top", fill="x", padx=5, pady=5)
+    calendar_btn.pack(side="right", padx=10, pady=10)
+
+    # Фрейм для вывода текущего веса
+    self.current_weight_frame = CTk.CTkFrame(
+        tab_workarea, height=150, fg_color="#000000", corner_radius=10
+    )
+    self.current_weight_frame.pack(side="top", fill="x", padx=5, pady=5)
 
     # Поле для отображения веса
     self.current_weight = CTk.CTkLabel(
-        current_weight_frame,
+        self.current_weight_frame,
         text="0.000",
         font=CTk.CTkFont(family="Digital-7 Mono", size=200),
         text_color="#00FF00",
         fg_color="black",
         bg_color="black",
     )
-    self.current_weight.pack(expand=True, fill="both", padx=20, pady=20)
+    self.current_weight.pack(expand=True, fill="both", padx=10, pady=10)
 
     # Информация с историей веса и этикеткой
     table_frame = CTk.CTkFrame(tab_workarea)

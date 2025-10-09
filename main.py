@@ -10,6 +10,8 @@ import aiohttp
 # pip install requests
 # pip install Pillow
 
+# pip install tkcalendar
+
 
 # ФУНКЦИИ И ПРОЦЕДУРЫ ОСНОВНОЙ ПРОГРАММЫ
 
