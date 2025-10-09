@@ -14,7 +14,8 @@ import aiohttp
 # ФУНКЦИИ И ПРОЦЕДУРЫ ОСНОВНОЙ ПРОГРАММЫ
 
 
-def clear_console():  # Очистка консоли, пока оставлю !
+def clear_console():  # Очистка консоли, пока
+    # оставлю !
     os.system("cls")
 
 if __name__ == "__main__":

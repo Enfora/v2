@@ -17,6 +17,7 @@ def save_settings_manager(self):  # Запоминаем настройки в J
         "stability_threshold": self.stability_threshold.get(),
         "poll_interval": self.poll_interval.get(),
         "zero_threshold": self.zero_threshold.get(),
+        "article_entry": self.article_entry.get()
     }
 
     """Сохранение настроек в JSON файл"""
@@ -72,6 +73,10 @@ def load_settings_manager(self):
             # Порог нуля
             self.zero_threshold.delete(0, "end")
             self.zero_threshold.insert(0, settings.get("zero_threshold", ""))
+
+            # Артикул
+            self.article_entry.delete(0, "end")
+            self.article_entry.insert(0, settings.get("article_entry", ""))
 
             # Заполняем выпадающие списки принтеров
             unit_printer = settings.get("unit_printer", "")

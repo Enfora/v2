@@ -9,5 +9,6 @@
   "total_printer": "Microsoft Print to PDF",
   "stability_threshold": "3",
   "poll_interval": "0.01",
-  "zero_threshold": "0.02"
+  "zero_threshold": "0.02",
+  "article_entry": "2500999"
 }

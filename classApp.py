@@ -1,7 +1,7 @@
 from settings_manager import save_settings_manager, load_settings_manager
 from interface_manager import Init_Interface_Settings_manager
 
-
+import random
 import customtkinter as CTk
 import win32print
 import tkinter.filedialog as filedialog
@@ -16,7 +16,11 @@ import asyncio
 import aiohttp
 import threading
 
+import barcode
+from barcode.writer import ImageWriter
 
+from io import BytesIO
+from PIL import ImageTk, Image
 
 class SimpleConsole(CTk.CTkTextbox):
     """
@@ -69,12 +73,13 @@ class App(CTk.CTk):
         super().__init__()
 
         # BAR TANDER
+        self.console = None
         self.bar_tender_enable = False
         self.btApp = None
 
         # Взвешивание
         self.getWeightEnable = False
-        
+
         self.stable_counter = int(0)
         self.array_weight = list()
         self.stable_weight = 0
@@ -103,14 +108,69 @@ class App(CTk.CTk):
 
     def Init_Interface_Settings(self):
         Init_Interface_Settings_manager(self)
-        
+
     def getWeightThreading_Enable(self):
         print("Старт взвешивания.")
         self.getWeightEnable = True
-    
+
     def getWeightThreading_Disable(self):
         print("Окончание взвешивания.")
         self.getWeightEnable = False
+
+    # region ТЕСТОВОЕ ВЗВЕШИВАНИЕ ДЛЯ ШТРИХКОДА
+    def generate_weight_test(self):
+        kg = random.randint(0, 99)
+        # Генерируем граммы от 0 до 999
+        grams = random.randint(0, 999)
+
+        weight = f"{kg}.{grams:03d}"
+
+        self.weight_entry_test.delete(0, "end")  # Очищаем поле
+        self.weight_entry_test.insert(0, str(weight))  # Вставляем сгенерированный вес
+
+        # Получаем артикул из поля
+        article = self.article_entry.get().strip()
+
+        if article:
+            # Форматируем вес в 5 цифр: 2 цифры кг + 3 цифры грамм
+            weight_for_barcode = f"{kg:02d}{grams:03d}"  # Всегда 6 цифр
+
+            # Прицепляем вес к артикулу
+            barcode_data = article + weight_for_barcode
+
+            print(f"Артикул: {article}")
+            print(f"Данные для штрих-кода: {barcode_data}")
+
+            # Генерируем штрих-код
+            try:
+                ean = barcode.get("ean13", barcode_data, writer=ImageWriter())
+
+                buffer = BytesIO()
+                ean.write(buffer)
+                buffer.seek(0)
+
+                pil_image = Image.open(buffer)
+                ctk_image = CTk.CTkImage(
+                    light_image=pil_image, dark_image=pil_image, size=(200, 80)
+                )
+
+                self.test_barcode_label.configure(image=ctk_image, text="")
+                print(f"Штрих-код сгенерирован: {barcode_data}")
+
+                # if self.bar_tender_enable != True:
+                #     print("BarTender не активирован.")
+                # return
+                self._run_bar_tender_in_main_thread(barcode_data, weight_for_barcode, False)
+
+            except Exception as e:
+                return
+
+                #print(f"Ошибка генерации штрих-кода: {e}")
+                #self.test_barcode_label.configure(text="Ошибка генерации")
+
+            print(f"Вес: {self.weight_entry_test.get()}")
+
+    # endregion
 
     def start_weight_monitoring(self):
         """Запуск мониторинга весов в отдельном потоке с asyncio"""
@@ -125,18 +185,17 @@ class App(CTk.CTk):
 
                 url = f"http://{ip_address}/rawdata.html"
                 loop.run_until_complete(self.basic_get(url))
-                
+
             finally:
                 loop.close()
 
         # Запускаем в отдельном потоке
         thread = threading.Thread(target=run_async, daemon=True)
         thread.start()
-        
 
     async def basic_get(self, url):
         """Асинхронный мониторинг весов"""
-        
+
         async with aiohttp.ClientSession() as session:
             while True:
                 try:
@@ -171,7 +230,6 @@ class App(CTk.CTk):
                         self.update_weight_display(weight_value)
                         self.update_weight_table(weight_value)
 
-
                 except asyncio.TimeoutError:
                     print("⏰ Таймаут: Весы не ответили за 2 секунды")
                 except aiohttp.ClientError as e:
@@ -194,39 +252,43 @@ class App(CTk.CTk):
         except Exception as e:
             print(f"Ошибка обновления интерфейса: {e}")
 
-    def update_weight_table (self, weight_value): # Вставка веса в таблицу
-        
+    def update_weight_table(self, weight_value):  # Вставка веса в таблицу
+
         if self.getWeightEnable != True:
             weight_value = 0
             return
-        
-        if weight_value <= float(self.zero_threshold.get()): # Если вес меньше или равен порогу нуля
+
+        if weight_value <= float(
+            self.zero_threshold.get()
+        ):  # Если вес меньше или равен порогу нуля
             self.array_weight.clear()
-            self.stable_weight = 0;
+            self.stable_weight = 0
             return
 
-        if len(self.array_weight)< float(self.stability_threshold.get()):
+        if len(self.array_weight) < float(self.stability_threshold.get()):
             self.array_weight.append(weight_value)
         else:
-            #проверка на стабильный вес
+            # проверка на стабильный вес
             if len((set(self.array_weight))) == 1:
 
                 weight_value = self.array_weight[0]
 
-                rounded_weight = round(weight_value, 2) # округляем текущий вес
-                rounded_stable = round(self.stable_weight, 2) # округляем текущий вес
+                rounded_weight = round(weight_value, 2)  # округляем текущий вес
+                rounded_stable = round(self.stable_weight, 2)  # округляем текущий вес
 
-                if abs (rounded_stable - rounded_weight)>=0.05:
+                if abs(rounded_stable - rounded_weight) >= 0.05:
                     self.stable_weight = weight_value
 
-                    self.add_to_table (weight_value) # Выводим вес в таблицу
-                    self.activated_barTender_process(weight_value) #Вызываем бартендер но он в другом потоке
+                    self.add_to_table(weight_value)  # Выводим вес в таблицу
+                    self.activated_barTender_process(
+                        weight_value
+                    )  # Вызываем бартендер но он в другом потоке
 
             # Очищаем список
             self.array_weight.clear()
 
     # Функция вывода веса в таблицу
-    def add_to_table(self,weight_value): 
+    def add_to_table(self, weight_value):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         history_entry = f"{timestamp}    {weight_value:.3f} кг\n"
 
@@ -234,40 +296,53 @@ class App(CTk.CTk):
         self.weights_table.insert("end", history_entry)
         self.weights_table.see("end")
         self.weights_table.configure(state="disabled")
-    
+
     def activated_barTender_process(self, weight_value):
         """Активация процесса печати - вызов в главном потоке"""
         # Передаем задачу в главный поток
         if self.bar_tender_enable != True:
             print("BarTender не активирован.")
             return
-        self.after(0, lambda: self._run_bar_tender_in_main_thread(weight_value))
+        #self.after(0, lambda: self._run_bar_tender_in_main_thread(weight_value))
 
-    def _run_bar_tender_in_main_thread(self, weight_value):
+    def _run_bar_tender_in_main_thread(self, barcode_data, weight_for_barcode, print = False):
+        
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        temp_path_jpg = os.path.join(current_dir, "temp.JPG")
+
+        if os.path.exists(temp_path_jpg):
+            os.remove(temp_path_jpg)
+
         template_path = self.template_entry.get()
-        
-        jpg_path = self.jpg_path.get()
-        normalized_path_jpg = jpg_path.replace("/", "\\")
-        
-        temp_path_jpg = normalized_path_jpg + "\\temp_jpg.jpg"
-        
+
         name_unit_printer = self.unit_printer_combo.get()
 
         btFormat = self.btApp.Formats.Open(template_path, False, name_unit_printer)
-        
-        btFormat.SetNamedSubStringValue("bt_massa", weight_value)
-        btFormat.SetNamedSubStringValue("bt_shtrih", "230076200216")
 
+        #btFormat = self.btApp.Formats.Open(template_path, False, "TSC TE210")
+        btFormat.SetNamedSubStringValue("bt_shtrih", barcode_data)
+        btFormat.SetNamedSubStringValue("bt_massa", weight_for_barcode)
 
         btFormat.ExportToFile(temp_path_jpg, "JPEG", 1, 300, 1)
-        btFormat.IdenticalCopiesOfLabel = 1 
+        btFormat.IdenticalCopiesOfLabel = 1
         PrintName = "TSC TE210"
-        btFormat.PrintOut(True, False)  # Печать (ShowDialog, WaitUntilCompleted)
-
-        print (temp_path_jpg)
+        #btFormat.PrintOut(True, False)  # Печать (ShowDialog, WaitUntilCompleted)
+        
+        imgShtrih = Image.open(temp_path_jpg)  # Укажите путь к вашему JPG файлу
+        imgShtrih = imgShtrih.resize((500, 400))  # Новый размер (ширина, высота)
+         
+        # Создаем CTkImage и обновляем существующую метку
+        new_photo = CTk.CTkImage(
+            light_image=imgShtrih,
+            dark_image=imgShtrih,
+            size=(350, 250)
+        )
+    
+        # Обновляем изображение в существующей метке
+        self.photo.configure(image=new_photo)
+        print(temp_path_jpg)
 
     # region Вспомогательные ФУНКЦИИ
-
 
     def validate_numeric_input(self, new_text):  # Валидация цифр
         """Функция проверяет что ввод содержит только цифры"""
@@ -354,7 +429,7 @@ class App(CTk.CTk):
             entry_widget.delete(0, "end")
             entry_widget.insert(0, directory)
 
-    #Функции работы с таблицей
+    # Функции работы с таблицей
 
     def clear_table(self):
         self.weights_table.configure(state="normal")
@@ -367,7 +442,6 @@ class App(CTk.CTk):
         self.weights_table.configure(state="disabled")
 
         print("Таблица истории очищена")
-
 
     # ----------------------------------------------------------------
 
@@ -384,7 +458,7 @@ class App(CTk.CTk):
         """Инициализация BarTender"""
         try:
             if self.bar_tender_enable:
-                messagebox.showinfo("Info", "BarTender уже инициализирован!")
+                #messagebox.showinfo("Info", "BarTender уже инициализирован!")
                 print("ℹ BarTender уже инициализирован")
                 return
 
@@ -392,7 +466,7 @@ class App(CTk.CTk):
             self.btApp.Visible = False
 
             self.bar_tender_enable = True
-            messagebox.showinfo("Success", "BarTender успешно инициализирован!")
+            #messagebox.showinfo("Success", "BarTender успешно инициализирован!")
             print("✓ BarTender успешно инициализирован")
 
         except Exception as e:
@@ -401,8 +475,6 @@ class App(CTk.CTk):
             error_msg = f"Ошибка инициализации BarTender: {str(e)}"
             # messagebox.showerror("Error", error_msg)
             print(f"✗ {error_msg}")
-
-    
 
     # region ФУНКЦИИ ТЕРМИНАЛА
     def create_console_frame(self, parent):
